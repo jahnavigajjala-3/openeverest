@@ -60,31 +60,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/session": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Everest API Login
-         * @description This API issues a new JWT token for logging in from the Everest API.
-         *     The provided user must have the `login` capability.
-         */
-        post: operations["createSession"];
-        /**
-         * Everest API Logout
-         * @description This API invalidates Everest API JWT token.
-         */
-        delete: operations["deleteSession"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/permissions": {
         parameters: {
             query?: never;
@@ -397,6 +372,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/clusters/{cluster}/plugins": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List plugins
+         * @description This API lists the enabled generic plugins available in the specified cluster
+         *     that the caller is permitted to see. The response drives the frontend plugin
+         *     loader and the CLI plugin discovery.
+         */
+        get: operations["listPlugins"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/clusters/{cluster}/plugin-context": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get plugin context
+         * @description This API returns the calling user's identity and the namespaces they can
+         *     access in the specified cluster. Plugins use it to scope their queries per
+         *     tenant.
+         */
+        get: operations["getPluginContext"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/clusters/{cluster}/namespaces/{namespace}/instances": {
         parameters: {
             query?: never;
@@ -568,7 +587,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * List backups
+         * @description This API lists all backups in the specified namespace and cluster.
+         *     Optionally filter by backup class, backup storage and backup origin.
+         */
+        get: operations["listBackups"];
         put?: never;
         /**
          * Create backup
@@ -600,6 +624,56 @@ export interface paths {
          * @description This API deletes the backup specified by the `backup` name in the specified `namespace` and `cluster`.
          */
         delete: operations["deleteBackup"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/clusters/{cluster}/namespaces/{namespace}/backup-imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List backup imports
+         * @description This API lists all backup imports in the specified namespace and cluster.
+         */
+        get: operations["listBackupImports"];
+        put?: never;
+        /**
+         * Create backup import
+         * @description This API creates a new backup import in the specified namespace and cluster.
+         *     A backup import discovers restorable backups in the referenced backup storage
+         *     and materializes them as Backup CRs.
+         */
+        post: operations["createBackupImport"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/clusters/{cluster}/namespaces/{namespace}/backup-imports/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get backup import
+         * @description This API gets the backup import specified by the `name` in the specified `namespace` and `cluster`.
+         */
+        get: operations["getBackupImport"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete backup import
+         * @description This API deletes the backup import specified by the `name` in the specified `namespace` and `cluster`.
+         */
+        delete: operations["deleteBackupImport"];
         options?: never;
         head?: never;
         patch?: never;
@@ -700,7 +774,10 @@ export interface paths {
         head?: never;
         /**
          * Patch backup storage
-         * @description This API patches the backup storage specified by the `name` in the specified `namespace` and `cluster`.
+         * @description This API applies Merge Patch to the backup storage specified by the `name` in the specified `namespace` and `cluster`.
+         *     Members absent from the patch keep their current value, and a member set to `null` is removed. A path that does not exist on the BackupStorage
+         *     is rejected rather than ignored. Include `metadata.resourceVersion` to make the patch conditional, which fails with 409 if the backup storage has changed.
+         *     `spec.s3.accessKeyId` and `spec.s3.secretAccessKey` are write-only: they are stored in the Secret named by `spec.s3.credentialsSecretRef` and never persisted on the object.
          */
         patch: operations["patchBackupStorage"];
         trace?: never;
@@ -871,6 +948,22 @@ export interface components {
         Error: {
             message?: string;
         };
+        /**
+         * @description APIError exposes the `reason` and the offending `field` in addition
+         *     to the `message` for better programmatic handling of errors.
+         */
+        APIError: components["schemas"]["Error"] & {
+            /**
+             * @description Machine-readable reason for the conflict.
+             * @example AlreadyExists
+             */
+            reason: string;
+            /**
+             * @description The field path that caused the conflict.
+             * @example metadata.name
+             */
+            field?: string;
+        };
         /** @description A list of OpenEverest-managed Secrets (metadata only). */
         SecretList: {
             /** @example v1 */
@@ -924,10 +1017,6 @@ export interface components {
              *     carried by the refresh token cookie.
              */
             token?: string;
-        };
-        UserCredentials: {
-            username?: string;
-            password?: string;
         };
         /** @description Backup storage parameters */
         CreateBackupStorageParams: {
@@ -1263,8 +1352,7 @@ export interface components {
             immutable?: boolean;
             /** @description Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds */
             kind?: string;
-            /** @description Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata */
-            metadata?: Record<string, never>;
+            metadata?: components["schemas"]["ObjectMeta"];
             /** @description stringData allows specifying non-binary secret data in string form. It is provided as a write-only input field for convenience. All keys and values are merged into the data field on write, overwriting any existing values. The stringData field is never output when reading from the API. */
             stringData?: {
                 [key: string]: string;
@@ -1288,8 +1376,7 @@ export interface components {
             immutable?: boolean;
             /** @description Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds */
             kind?: string;
-            /** @description Standard object's metadata. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#metadata */
-            metadata?: Record<string, never>;
+            metadata?: components["schemas"]["ObjectMeta"];
         };
         /** @description A list of OpenEverest-managed ConfigMaps. */
         ConfigMapList: {
@@ -1356,6 +1443,44 @@ export interface components {
         };
         ClusterList: {
             items: components["schemas"]["Cluster"][];
+        };
+        /** @description A single UI/CLI extension point contributed by a plugin. */
+        PluginExtensionPoint: {
+            type: string;
+            label?: string;
+            path?: string;
+            icon?: string;
+            providers?: string[];
+        };
+        /** @description A single enabled plugin as advertised to the frontend loader. */
+        PluginDescriptor: {
+            name: string;
+            displayName: string;
+            description?: string;
+            version?: string;
+            vendor?: string;
+            icon?: string;
+            /**
+             * @description API-compatibility gate: the host application semver range this
+             *     plugin supports. Enforced against the host version at load time.
+             */
+            compatibleHostVersions?: string;
+            /**
+             * @description UI-contract gate: the React-major semver range this plugin's
+             *     frontend supports. Enforced against the host React major at load
+             *     time (the only runtime a bundled-MUI plugin shares with the host).
+             */
+            compatibleUiContractVersions?: string;
+            bundleUrl: string;
+            extensionPoints?: components["schemas"]["PluginExtensionPoint"][];
+        };
+        /** @description A list of enabled plugins the caller is permitted to see. */
+        PluginDescriptorList: components["schemas"]["PluginDescriptor"][];
+        /** @description The calling user's identity and accessible namespaces in a cluster. */
+        PluginContext: {
+            user: string;
+            groups?: string[];
+            namespaces: string[];
         };
         /** @description ObjectMeta is the standard Kubernetes object metadata. Only the fields relevant to the Everest API are described; unknown fields are accepted but may be ignored by the server. */
         ObjectMeta: {
@@ -1491,12 +1616,30 @@ export interface components {
                              */
                             parameters?: Record<string, never>;
                             /**
-                             * Format: int32
-                             * @description RetentionCopies is the number of recent backups to keep for this
-                             *     schedule. Zero (or unset) means "keep all". Negative values are
-                             *     rejected.
+                             * @description Retention configures count-based or time-based backup retention for
+                             *     this schedule. Unset keeps all backups.
                              */
-                            retentionCopies?: number;
+                            retention?: {
+                                /**
+                                 * Format: int32
+                                 * @description Count is the number of recent backups to keep when Type is count.
+                                 *     Required when Type is count (minimum 1). Forbidden when Type is time.
+                                 *     Omit Retention on the schedule to keep all backups.
+                                 */
+                                count?: number;
+                                /**
+                                 * @description Duration is the recovery window when Type is time, in the form
+                                 *     <positive-integer><unit> where unit is d (days), w (weeks), or m
+                                 *     (months) — e.g. "30d", "4w", "2m". Forbidden when Type is count.
+                                 */
+                                duration?: string;
+                                /**
+                                 * @description Type selects count-based or time-based retention.
+                                 * @default count
+                                 * @enum {string}
+                                 */
+                                type: "count" | "time";
+                            };
                         }[];
                         /**
                          * @description StorageRef references a BackupStorage in the same namespace. The
@@ -1522,8 +1665,6 @@ export interface components {
                          *     based on the Version specified.
                          */
                         image?: string;
-                        /** @description Name of the component. */
-                        name?: string;
                         /**
                          * @description Parameters contains component-specific structured parameters, validated
                          *     against the provider's components[].parametersSchema. Engine
@@ -1588,6 +1729,8 @@ export interface components {
                              * @description Affinity constrains node selection, pod co-location and pod
                              *     anti-affinity (spreading pods across nodes, zones or other topology
                              *     domains for high availability).
+                             *     When omitted, the provider applies its default, which may require each
+                             *     replica on its own node; an empty affinity ({}) sets no constraints.
                              */
                             affinity?: {
                                 /** @description Describes node affinity scheduling rules for the pod. */
@@ -2230,7 +2373,9 @@ export interface components {
                             }[];
                             /**
                              * @description TopologySpreadConstraints describe how the pods spread across topology
-                             *     domains. All constraints are ANDed.
+                             *     domains. A constraint with neither labelSelector nor matchLabelKeys counts
+                             *     this component's pods. When omitted, the provider applies its default; an
+                             *     empty list sets no constraints.
                              */
                             topologySpreadConstraints?: {
                                 /**
@@ -2514,6 +2659,32 @@ export interface components {
                  */
                 deletionPolicy?: "Cascade" | "Orphan";
                 /**
+                 * @description Maintenance governs how disruptive actions raised against this
+                 *     Instance (e.g. the convergence step after a provider upgrade) are
+                 *     authorized. It does NOT govern the deliberate engine-version upgrade
+                 *     flow (spec.version / spec.components[].version).
+                 */
+                maintenance?: {
+                    /**
+                     * @description Approved is a one-time authorization for an action above the standing
+                     *     tolerance: set it to the exact approvalToken of the held action from
+                     *     status.pendingMaintenance. It is matched literally, authorizes only
+                     *     that occurrence, and re-arms naturally — a later action carries a
+                     *     different token, so a stale value never authorizes it. It is NOT a
+                     *     provider version.
+                     */
+                    approved?: string;
+                    /**
+                     * @description AutoApproveUpTo is the standing disruption tolerance: any action at or
+                     *     below this impact applies automatically, anything above it is held on
+                     *     status.pendingMaintenance. It is cause-agnostic — the tolerance applies
+                     *     whether the action was raised by a provider upgrade or anything else.
+                     * @default NonDisruptive
+                     * @enum {string}
+                     */
+                    autoApproveUpTo?: "NonDisruptive" | "RollingRestart" | "Downtime";
+                };
+                /**
                  * @description Parameters contains structured parameters that apply to the Instance
                  *     as a whole, complementing the topology- and component-scoped
                  *     parameters. The payload is validated against the referenced Provider's
@@ -2542,6 +2713,21 @@ export interface components {
                      *     If omitted, the provider's default topology is used.
                      */
                     type?: string;
+                };
+                /**
+                 * @description UserSecretRef optionally seeds the engine's initial (bootstrap)
+                 *     credentials from a Secret in the same namespace, for providers whose
+                 *     engine supports setting initial credentials at creation time.
+                 *
+                 *     When omitted, the provider generates credentials automatically. The
+                 *     referenced Secret's required keys are provider-specific and validated
+                 *     by the referenced Provider. The field is immutable once set: initial
+                 *     credentials only apply at engine creation time, so changing it later
+                 *     would have no effect.
+                 */
+                userSecretRef?: {
+                    /** @description Name of the referenced Secret. */
+                    name: string;
                 };
                 /**
                  * @description Version selects a provider-defined version bundle, resolving compatible
@@ -2624,8 +2810,12 @@ export interface components {
             spec: {
                 componentTypes?: {
                     [key: string]: {
+                        /**
+                         * @description DefaultVersion names the entry in Versions used when neither the
+                         *     Instance nor a version bundle selects one.
+                         */
+                        defaultVersion?: string;
                         versions?: {
-                            default?: boolean;
                             /**
                              * @description Deprecated marks a version as still supported but scheduled for
                              *     removal. Instances running on it get a proactive warning with a
@@ -2674,6 +2864,11 @@ export interface components {
                         uiSchema?: Record<string, never>;
                     };
                 };
+                /**
+                 * @description DefaultVersion names the bundle in Versions used when an Instance
+                 *     omits Spec.Version.
+                 */
+                defaultVersion?: string;
                 /**
                  * @description ParametersSchema declares the OpenAPI v3 schema for the instance-wide
                  *     parameters payload (Instance.spec.parameters).
@@ -2767,7 +2962,7 @@ export interface components {
                  * @description Versions defines curated version bundles — named sets of component
                  *     versions that are known to be mutually compatible. Users reference
                  *     a bundle via Instance.Spec.Version. If the user does not set a version,
-                 *     the bundle whose Default field is true is used automatically.
+                 *     the bundle named by DefaultVersion is used automatically.
                  */
                 versions?: {
                     /**
@@ -2777,11 +2972,6 @@ export interface components {
                     components?: {
                         [key: string]: string;
                     };
-                    /**
-                     * @description Default marks this bundle as the implicit choice when an Instance omits
-                     *     Spec.Version entirely. Exactly one bundle should have Default: true.
-                     */
-                    default?: boolean;
                     /**
                      * @description Name is the unique identifier for this bundle (e.g. "8.0.12").
                      *     Users set Instance.Spec.Version to this value to select the bundle.
@@ -2943,12 +3133,30 @@ export interface components {
                              */
                             parameters?: Record<string, never>;
                             /**
-                             * Format: int32
-                             * @description RetentionCopies is the number of recent backups to keep for this
-                             *     schedule. Zero (or unset) means "keep all". Negative values are
-                             *     rejected.
+                             * @description Retention configures count-based or time-based backup retention for
+                             *     this schedule. Unset keeps all backups.
                              */
-                            retentionCopies?: number;
+                            retention?: {
+                                /**
+                                 * Format: int32
+                                 * @description Count is the number of recent backups to keep when Type is count.
+                                 *     Required when Type is count (minimum 1). Forbidden when Type is time.
+                                 *     Omit Retention on the schedule to keep all backups.
+                                 */
+                                count?: number;
+                                /**
+                                 * @description Duration is the recovery window when Type is time, in the form
+                                 *     <positive-integer><unit> where unit is d (days), w (weeks), or m
+                                 *     (months) — e.g. "30d", "4w", "2m". Forbidden when Type is count.
+                                 */
+                                duration?: string;
+                                /**
+                                 * @description Type selects count-based or time-based retention.
+                                 * @default count
+                                 * @enum {string}
+                                 */
+                                type: "count" | "time";
+                            };
                         }[];
                         /**
                          * @description StorageRef references a BackupStorage in the same namespace. The
@@ -2974,8 +3182,6 @@ export interface components {
                          *     based on the Version specified.
                          */
                         image?: string;
-                        /** @description Name of the component. */
-                        name?: string;
                         /**
                          * @description Parameters contains component-specific structured parameters, validated
                          *     against the provider's components[].parametersSchema. Engine
@@ -3040,6 +3246,8 @@ export interface components {
                              * @description Affinity constrains node selection, pod co-location and pod
                              *     anti-affinity (spreading pods across nodes, zones or other topology
                              *     domains for high availability).
+                             *     When omitted, the provider applies its default, which may require each
+                             *     replica on its own node; an empty affinity ({}) sets no constraints.
                              */
                             affinity?: {
                                 /** @description Describes node affinity scheduling rules for the pod. */
@@ -3682,7 +3890,9 @@ export interface components {
                             }[];
                             /**
                              * @description TopologySpreadConstraints describe how the pods spread across topology
-                             *     domains. All constraints are ANDed.
+                             *     domains. A constraint with neither labelSelector nor matchLabelKeys counts
+                             *     this component's pods. When omitted, the provider applies its default; an
+                             *     empty list sets no constraints.
                              */
                             topologySpreadConstraints?: {
                                 /**
@@ -3966,6 +4176,32 @@ export interface components {
                  */
                 deletionPolicy?: "Cascade" | "Orphan";
                 /**
+                 * @description Maintenance governs how disruptive actions raised against this
+                 *     Instance (e.g. the convergence step after a provider upgrade) are
+                 *     authorized. It does NOT govern the deliberate engine-version upgrade
+                 *     flow (spec.version / spec.components[].version).
+                 */
+                maintenance?: {
+                    /**
+                     * @description Approved is a one-time authorization for an action above the standing
+                     *     tolerance: set it to the exact approvalToken of the held action from
+                     *     status.pendingMaintenance. It is matched literally, authorizes only
+                     *     that occurrence, and re-arms naturally — a later action carries a
+                     *     different token, so a stale value never authorizes it. It is NOT a
+                     *     provider version.
+                     */
+                    approved?: string;
+                    /**
+                     * @description AutoApproveUpTo is the standing disruption tolerance: any action at or
+                     *     below this impact applies automatically, anything above it is held on
+                     *     status.pendingMaintenance. It is cause-agnostic — the tolerance applies
+                     *     whether the action was raised by a provider upgrade or anything else.
+                     * @default NonDisruptive
+                     * @enum {string}
+                     */
+                    autoApproveUpTo?: "NonDisruptive" | "RollingRestart" | "Downtime";
+                };
+                /**
                  * @description Parameters contains structured parameters that apply to the Instance
                  *     as a whole, complementing the topology- and component-scoped
                  *     parameters. The payload is validated against the referenced Provider's
@@ -3994,6 +4230,21 @@ export interface components {
                      *     If omitted, the provider's default topology is used.
                      */
                     type?: string;
+                };
+                /**
+                 * @description UserSecretRef optionally seeds the engine's initial (bootstrap)
+                 *     credentials from a Secret in the same namespace, for providers whose
+                 *     engine supports setting initial credentials at creation time.
+                 *
+                 *     When omitted, the provider generates credentials automatically. The
+                 *     referenced Secret's required keys are provider-specific and validated
+                 *     by the referenced Provider. The field is immutable once set: initial
+                 *     credentials only apply at engine creation time, so changing it later
+                 *     would have no effect.
+                 */
+                userSecretRef?: {
+                    /** @description Name of the referenced Secret. */
+                    name: string;
                 };
                 /**
                  * @description Version selects a provider-defined version bundle, resolving compatible
@@ -4050,18 +4301,25 @@ export interface components {
                         };
                     }[];
                 };
-                /** @description Components is the status of the components in the database cluster. */
+                /** @description Components reports how many pods each component has and how many are Ready. */
                 components?: {
-                    /** @description PodRefs references the Pods backing this component. */
-                    podRefs?: {
-                        /** @description Name of the referenced object. */
-                        name: string;
-                    }[];
-                    /** Format: int32 */
-                    ready?: number;
-                    state?: string;
-                    /** Format: int32 */
-                    total?: number;
+                    /** @description Name is a key of spec.components. */
+                    name: string;
+                    /**
+                     * Format: int32
+                     * @description ReadyReplicas is the number of those pods that are Ready.
+                     */
+                    readyReplicas?: number;
+                    /**
+                     * Format: int32
+                     * @description Replicas is the number of the component's pods that are not terminating.
+                     */
+                    replicas?: number;
+                    /**
+                     * @description Selector selects the component's pods in the Instance's namespace, in
+                     *     the form kubectl get pods -l accepts.
+                     */
+                    selector?: string;
                 }[];
                 conditions?: {
                     /**
@@ -4118,6 +4376,37 @@ export interface components {
                 };
                 /** @description Message is a custom user-facing message describing the current state of the instance. */
                 message?: string;
+                /**
+                 * Format: int64
+                 * @description ObservedGeneration is the metadata.generation the provider-runtime last
+                 *     reconciled. Status describes an older spec while it is lower than
+                 *     metadata.generation.
+                 */
+                observedGeneration?: number;
+                /**
+                 * @description PendingMaintenance lists the disruptive actions currently held awaiting
+                 *     approval. It is recomputed on every reconcile from the actions the
+                 *     provider currently requests above the Instance's tolerance, so it can
+                 *     never go stale: an action the provider stops requesting disappears.
+                 */
+                pendingMaintenance?: {
+                    /**
+                     * @description ApprovalToken is the occurrence-unique, human-readable token the
+                     *     provider assigned to this held action. Copy it verbatim into
+                     *     spec.maintenance.approved to authorize this specific action.
+                     */
+                    approvalToken?: string;
+                    /**
+                     * @description Description is a human-readable summary of the action and its
+                     *     observable impact. It never exposes operator internals.
+                     */
+                    description: string;
+                    /**
+                     * @description Severity is the action's observable database impact.
+                     * @enum {string}
+                     */
+                    severity: "NonDisruptive" | "RollingRestart" | "Downtime";
+                }[];
                 /**
                  * @description Phase of the database cluster.
                  * @enum {string}
@@ -4219,12 +4508,73 @@ export interface components {
                  */
                 deletionPolicy?: "Retain" | "Delete";
                 /**
-                 * @description InstanceRef references the Instance to back up. The Instance must
-                 *     live in the same namespace as this Backup.
+                 * @description Origin identifies where this Backup's data comes from: produced by a
+                 *     live Instance, or imported from data already present in a BackupStorage.
                  */
-                instanceRef: {
-                    /** @description Name of the referenced object. */
-                    name: string;
+                origin: {
+                    /**
+                     * @description External identifies data already present in the referenced BackupStorage
+                     *     rather than produced by a live Instance. Required when Type is External.
+                     *     When set, the restore is built directly from storageRef + external.path
+                     *     with no live operator object.
+                     */
+                    external?: {
+                        /**
+                         * Format: date-time
+                         * @description CompletedAt is the time when the backup completed.
+                         */
+                        completedAt: string;
+                        /**
+                         * @description Path is the backup's path within the BackupStorage. The bucket is
+                         *     already determined by storageRef, so it is not repeated here. The path
+                         *     is unique within its storage and is used for restore.
+                         */
+                        path: string;
+                        /**
+                         * @description SourceMetadata is engine-specific metadata that is used to make
+                         *     compatibility decisions for creating an Instance from this Backup.
+                         */
+                        sourceMetadata?: {
+                            /**
+                             * @description BackupType is the backup method recorded (e.g. "logical" or "physical"
+                             *     for PBM).
+                             */
+                            backupType?: string;
+                            /**
+                             * @description EngineVersion is the engine version recorded in the backup.
+                             *     Its granularity may be whatever the backup metadata records, so it
+                             *     may be a full version (e.g. a MongoDB server version like "8.0.12-4",
+                             *     a Percona XtraDB Cluster server version like "8.4.8-8.1") or only a
+                             *     major version (e.g. a PostgreSQL version like "18").
+                             */
+                            engineVersion?: string;
+                            /**
+                             * @description Topology names the source Instance's topology (e.g. "replicaSet" or
+                             *     "sharded" for PSMDB). Recorded only for backups taken by a
+                             *     ProviderManaged backup class.
+                             */
+                            topology?: string;
+                        };
+                        /**
+                         * Format: date-time
+                         * @description StartedAt is the time when the backup started.
+                         */
+                        startedAt: string;
+                    };
+                    /**
+                     * @description InstanceRef references the Instance that produced this Backup. The
+                     *     Instance must live in the same namespace as this Backup. Required when
+                     *     Type is Instance.
+                     */
+                    instanceRef?: {
+                        /** @description Name of the referenced object. */
+                        name: string;
+                    };
+                    /**
+                     * @description Type selects the origin variant.
+                     * @enum {string}
+                     */
+                    type: "Instance" | "External";
                 };
                 /**
                  * @description Parameters is the backup-time structured configuration validated
@@ -4255,6 +4605,7 @@ export interface components {
                 /**
                  * Format: date-time
                  * @description CompletedAt is the time when the backup completed successfully.
+                 *     For external backups this mirrors spec.origin.external.completedAt.
                  */
                 completedAt?: string;
                 conditions?: {
@@ -4300,7 +4651,8 @@ export interface components {
                 executionMode?: "ProviderManaged" | "Job";
                 /**
                  * @description JobRef references the Job that is running the backup.
-                 *     Populated only for Job classes.
+                 *     Populated only for Job classes. Empty for external backups, which run
+                 *     no Job.
                  */
                 jobRef?: {
                     /** @description Name of the referenced object. */
@@ -4316,7 +4668,8 @@ export interface components {
                 /**
                  * @description OperatorBackupRef points at the operator-native backup resource the
                  *     provider created (e.g., PerconaServerMongoDBBackup). Populated only
-                 *     for ProviderManaged classes.
+                 *     for ProviderManaged classes. Empty for external backups, which have no
+                 *     operator-native backup object.
                  */
                 operatorBackupRef?: {
                     /**
@@ -4329,15 +4682,47 @@ export interface components {
                     /** @description Name of the referenced object. */
                     name: string;
                 };
-                /** @description Size is the size of the backup data as reported by the engine. */
+                /**
+                 * @description Size is the size of the backup data as reported by the engine.
+                 *     Empty for external backups.
+                 */
                 size?: string;
+                /**
+                 * @description SourceMetadata is the source Instance metadata recorded with the backup.
+                 *     For external backups this mirrors spec.origin.external.sourceMetadata;
+                 *     for Instance-origin backups the provider populates it from the engine.
+                 */
+                sourceMetadata?: {
+                    /**
+                     * @description BackupType is the backup method recorded (e.g. "logical" or "physical"
+                     *     for PBM).
+                     */
+                    backupType?: string;
+                    /**
+                     * @description EngineVersion is the engine version recorded in the backup.
+                     *     Its granularity may be whatever the backup metadata records, so it
+                     *     may be a full version (e.g. a MongoDB server version like "8.0.12-4",
+                     *     a Percona XtraDB Cluster server version like "8.4.8-8.1") or only a
+                     *     major version (e.g. a PostgreSQL version like "18").
+                     */
+                    engineVersion?: string;
+                    /**
+                     * @description Topology names the source Instance's topology (e.g. "replicaSet" or
+                     *     "sharded" for PSMDB). Recorded only for backups taken by a
+                     *     ProviderManaged backup class.
+                     */
+                    topology?: string;
+                };
                 /**
                  * Format: date-time
                  * @description StartedAt is the time when the backup started.
+                 *     For external backups this mirrors spec.origin.external.startedAt.
                  */
                 startedAt?: string;
                 /**
                  * @description State is the current state of the backup.
+                 *     For external backups, the state is Succeeded if the backup has valid
+                 *     StartedAt and CompletedAt set.
                  * @enum {string}
                  */
                 state?: "Pending" | "Running" | "Succeeded" | "Failed" | "Error" | "Deleting";
@@ -4835,6 +5220,11 @@ export interface components {
                  */
                 supportedProviders?: string[];
                 /**
+                 * @description SupportsImport indicates whether the owner of this class can discover and
+                 *     import restorable backups already sitting in a BackupStorage.
+                 */
+                supportsImport?: boolean;
+                /**
                  * @description UISchema contains free-form rendering hints for the frontend forms that
                  *     configure backup, restore, and PITR for an Instance using this class.
                  *     The runtime treats this field as opaque; only the UI consumes it. The
@@ -4892,6 +5282,123 @@ export interface components {
             metadata?: {
                 /** @description Name must be unique within a namespace. Is required when creating resources, although some resources may allow a client to request the generation of an appropriate name automatically. Name is primarily intended for creation idempotence and configuration definition. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names#names */
                 name?: string;
+            };
+        };
+        /** @description BackupImport is the Schema for the backupimports API. */
+        BackupImport: {
+            /**
+             * @description APIVersion defines the versioned schema of this representation of an object.
+             *     Servers should convert recognized schemas to the latest internal value, and
+             *     may reject unrecognized values.
+             *     More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+             */
+            apiVersion?: string;
+            /**
+             * @description Kind is a string value representing the REST resource this object represents.
+             *     Servers may infer this from the endpoint the client submits requests to.
+             *     Cannot be updated.
+             *     In CamelCase.
+             *     More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+             */
+            kind?: string;
+            metadata?: components["schemas"]["ObjectMeta"];
+            /** @description spec defines the desired state of BackupImport */
+            spec: {
+                /**
+                 * @description ClassRef references the cluster-scoped BackupClass that determines how
+                 *     backups in the storage are parsed. The class's executionMode controls
+                 *     how the import is executed. The ProviderManaged classes are reconciled
+                 *     by the provider.
+                 */
+                classRef: {
+                    /** @description Name of the referenced object. */
+                    name: string;
+                };
+                /**
+                 * @description StorageRef references a BackupStorage in the same namespace whose
+                 *     contents are listed and parsed. The reconciler reads the storage and
+                 *     its credentials secret.
+                 */
+                storageRef: {
+                    /** @description Name of the referenced object. */
+                    name: string;
+                };
+            };
+            /** @description status defines the observed state of BackupImport */
+            status?: {
+                conditions?: {
+                    /**
+                     * Format: date-time
+                     * @description lastTransitionTime is the last time the condition transitioned from one status to another.
+                     *     This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                     */
+                    lastTransitionTime: string;
+                    /**
+                     * @description message is a human readable message indicating details about the transition.
+                     *     This may be an empty string.
+                     */
+                    message: string;
+                    /**
+                     * Format: int64
+                     * @description observedGeneration represents the .metadata.generation that the condition was set based upon.
+                     *     For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                     *     with respect to the current state of the instance.
+                     */
+                    observedGeneration?: number;
+                    /**
+                     * @description reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                     *     Producers of specific condition types may define expected values and meanings for this field,
+                     *     and whether the values are considered a guaranteed API.
+                     *     The value should be a CamelCase string.
+                     *     This field may not be empty.
+                     */
+                    reason: string;
+                    /**
+                     * @description status of the condition, one of True, False, Unknown.
+                     * @enum {string}
+                     */
+                    status: "True" | "False" | "Unknown";
+                    /** @description type of condition in CamelCase or in foo.example.com/CamelCase. */
+                    type: string;
+                }[];
+                /**
+                 * Format: int32
+                 * @description CreatedCount is the number of Backup CRs created. Backups are deduped on
+                 *     (storageRef, path), so the import does not create duplicates.
+                 */
+                createdCount?: number;
+                /**
+                 * Format: int32
+                 * @description DiscoveredCount is the number of restorable backups found in the
+                 *     storage.
+                 */
+                discoveredCount?: number;
+                /**
+                 * Format: int64
+                 * @description LastObservedGeneration is the last observed generation of the BackupImport CR.
+                 */
+                lastObservedGeneration?: number;
+                /** @description Message is a human-readable message about the current state. */
+                message?: string;
+                /**
+                 * @description State is the current state of the backup import.
+                 * @enum {string}
+                 */
+                state?: "Pending" | "Succeeded" | "Failed" | "Error";
+            };
+        };
+        /** @description BackupImportList is an object that contains the list of the existing backupimports. */
+        BackupImportList: {
+            /** @description APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources */
+            apiVersion?: string;
+            items?: components["schemas"]["BackupImport"][];
+            /** @description Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds */
+            kind?: string;
+            metadata?: {
+                /** @description Name must be unique within a namespace. Is required when creating resources, although some resources may allow a client to request the generation of an appropriate name automatically. Name is primarily intended for creation idempotence and configuration definition. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names#names */
+                name?: string;
+                /** @description Namespace defines the space within which each name must be unique. An empty namespace is equivalent to the "default" namespace, but "default" is the canonical representation. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces */
+                namespace?: string;
             };
         };
         /** @description BackupStorage is the Schema for the backupstorages API. */
@@ -5198,96 +5705,6 @@ export interface operations {
             };
         };
     };
-    createSession: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** @description The user credentials */
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UserCredentials"];
-            };
-        };
-        responses: {
-            /** @description Successful operation */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        token?: string;
-                    };
-                };
-            };
-            /** @description Unsuccessful operation */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Too many attempts */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Internal server error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    deleteSession: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful operation */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Too many attempts */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Internal server error */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
     getUserPermissions: {
         parameters: {
             query?: never;
@@ -5492,6 +5909,15 @@ export interface operations {
                     "application/json": components["schemas"]["Cluster"];
                 };
             };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Cluster not found */
             404: {
                 headers: {
@@ -5593,6 +6019,15 @@ export interface operations {
                     "application/json": components["schemas"]["InstancePreset"];
                 };
             };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Instance preset not found */
             404: {
                 headers: {
@@ -5637,6 +6072,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InstancePreset"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             /** @description Instance preset not found */
@@ -5714,6 +6158,15 @@ export interface operations {
                     "application/json": components["schemas"]["Provider"];
                 };
             };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Provider not found */
             404: {
                 headers: {
@@ -5721,6 +6174,70 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listPlugins: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The name of the cluster */
+                cluster: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of plugins */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginDescriptorList"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getPluginContext: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The name of the cluster */
+                cluster: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Plugin context */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PluginContext"];
                 };
             };
             /** @description Error */
@@ -5805,6 +6322,33 @@ export interface operations {
                     "application/json": components["schemas"]["Instance"];
                 };
             };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Namespace not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
             /** @description Error */
             default: {
                 headers: {
@@ -5839,6 +6383,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Instance"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             /** @description Instance not found */
@@ -5891,6 +6444,15 @@ export interface operations {
                     "application/json": components["schemas"]["Instance"];
                 };
             };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Instance not found */
             404: {
                 headers: {
@@ -5898,6 +6460,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
                 };
             };
             /** @description Error */
@@ -5951,6 +6522,15 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Instance not found */
             404: {
                 headers: {
@@ -5958,6 +6538,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
                 };
             };
             /** @description Error */
@@ -6003,6 +6592,15 @@ export interface operations {
                     "application/json": components["schemas"]["Instance"];
                 };
             };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Instance not found */
             404: {
                 headers: {
@@ -6010,6 +6608,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
                 };
             };
             /** @description The Content-Type is not application/merge-patch+json */
@@ -6057,6 +6664,15 @@ export interface operations {
                     "application/json": components["schemas"]["InstanceConnectionDetails"];
                 };
             };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Instance or connection details not found */
             404: {
                 headers: {
@@ -6102,8 +6718,8 @@ export interface operations {
                     "application/json": components["schemas"]["BackupList"];
                 };
             };
-            /** @description Unsuccessful operation */
-            400: {
+            /** @description Forbidden */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6147,8 +6763,8 @@ export interface operations {
                     "application/json": components["schemas"]["RestoreList"];
                 };
             };
-            /** @description Unsuccessful operation */
-            400: {
+            /** @description Forbidden */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6222,8 +6838,67 @@ export interface operations {
                     "application/json": components["schemas"]["BackupClass"];
                 };
             };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Backup class not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listBackups: {
+        parameters: {
+            query?: {
+                /** @description Filter backups by backup class name */
+                backupClass?: string;
+                /** @description Filter backups by backup storage name */
+                backupStorage?: string;
+                /** @description Filter backups by origin type */
+                backupOrigin?: "Instance" | "External";
+            };
+            header?: never;
+            path: {
+                /** @description The name of the cluster */
+                cluster: string;
+                /** @description The namespace of the backups */
+                namespace: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of backups */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupList"];
+                };
+            };
+            /** @description Unsuccessful operation */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6270,6 +6945,33 @@ export interface operations {
                     "application/json": components["schemas"]["Backup"];
                 };
             };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Namespace not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
             /** @description Error */
             default: {
                 headers: {
@@ -6304,6 +7006,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Backup"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             /** @description Backup not found */
@@ -6366,6 +7077,15 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Backup not found */
             404: {
                 headers: {
@@ -6373,6 +7093,230 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    listBackupImports: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The name of the cluster */
+                cluster: string;
+                /** @description The namespace where the backup imports are located */
+                namespace: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description List of backup imports */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupImportList"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    createBackupImport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The name of the cluster */
+                cluster: string;
+                /** @description The namespace where the backup import will be created */
+                namespace: string;
+            };
+            cookie?: never;
+        };
+        /** @description The backup import object to be created */
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BackupImport"];
+            };
+        };
+        responses: {
+            /** @description Backup import created successfully */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupImport"];
+                };
+            };
+            /** @description Unsuccessful operation */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Namespace not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getBackupImport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The name of the cluster */
+                cluster: string;
+                /** @description The namespace where the backup import is located */
+                namespace: string;
+                /** @description The name of the backup import */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Backup import details */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BackupImport"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Backup import not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    deleteBackupImport: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The name of the cluster */
+                cluster: string;
+                /** @description The namespace where the backup import is located */
+                namespace: string;
+                /** @description The name of the backup import */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Backup import deleted successfully */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
                 };
             };
             /** @description Error */
@@ -6414,6 +7358,33 @@ export interface operations {
                     "application/json": components["schemas"]["Restore"];
                 };
             };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Namespace not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
             /** @description Error */
             default: {
                 headers: {
@@ -6448,6 +7419,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Restore"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             /** @description Restore not found */
@@ -6502,6 +7482,15 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Restore not found */
             404: {
                 headers: {
@@ -6509,6 +7498,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
                 };
             };
             /** @description Error */
@@ -6543,15 +7541,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BackupStorageList"];
-                };
-            };
-            /** @description Unsuccessful operation */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
                 };
             };
             /** @description Internal server error */
@@ -6611,6 +7600,33 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Namespace not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
             /** @description Internal server error */
             500: {
                 headers: {
@@ -6654,6 +7670,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BackupStorage"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             /** @description Backup storage not found */
@@ -6715,6 +7740,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Backup storage not found */
             404: {
                 headers: {
@@ -6722,6 +7756,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
                 };
             };
             /** @description Error */
@@ -6767,6 +7810,24 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
             /** @description Error */
             default: {
                 headers: {
@@ -6792,10 +7853,12 @@ export interface operations {
             };
             cookie?: never;
         };
-        /** @description The backup storage fields to be patched */
+        /** @description A partial BackupStorage document. `status` and the `ownerReferences`, `finalizers`, `name` and `namespace` members of `metadata` are rejected. */
         requestBody: {
             content: {
-                "application/json": components["schemas"]["BackupStorage"];
+                "application/merge-patch+json": {
+                    [key: string]: unknown;
+                };
             };
         };
         responses: {
@@ -6817,8 +7880,35 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Backup storage not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
+            /** @description The Content-Type is not application/merge-patch+json */
+            415: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6858,15 +7948,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MonitoringConfigList"];
-                };
-            };
-            /** @description Unsuccessful operation */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
                 };
             };
             /** @description Internal server error */
@@ -6917,6 +7998,33 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Namespace not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
             /** @description Internal server error */
             500: {
                 headers: {
@@ -6953,8 +8061,8 @@ export interface operations {
                     "application/json": components["schemas"]["MonitoringConfig"];
                 };
             };
-            /** @description Unsuccessful operation */
-            400: {
+            /** @description Forbidden */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7014,6 +8122,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Monitoring config not found */
             404: {
                 headers: {
@@ -7021,6 +8138,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
                 };
             };
             /** @description Internal server error */
@@ -7073,6 +8199,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Monitoring config not found */
             404: {
                 headers: {
@@ -7080,6 +8215,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
                 };
             };
             /** @description Internal server error */
@@ -7119,15 +8263,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConfigMapList"];
-                };
-            };
-            /** @description Unsuccessful operation */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
                 };
             };
             /** @description Internal server error */
@@ -7178,6 +8313,33 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Namespace not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
             /** @description Internal server error */
             500: {
                 headers: {
@@ -7212,6 +8374,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConfigMap"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             /** @description ConfigMap not found */
@@ -7257,6 +8428,15 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description ConfigMap not found */
             404: {
                 headers: {
@@ -7264,6 +8444,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
                 };
             };
             /** @description Internal server error */
@@ -7303,15 +8492,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SecretList"];
-                };
-            };
-            /** @description Unsuccessful operation */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
                 };
             };
             /** @description Internal server error */
@@ -7362,6 +8542,33 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Namespace not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
+                };
+            };
             /** @description Internal server error */
             500: {
                 headers: {
@@ -7396,6 +8603,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Secret"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
                 };
             };
             /** @description Secret not found */
@@ -7441,6 +8657,15 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Secret not found */
             404: {
                 headers: {
@@ -7448,6 +8673,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["APIError"];
                 };
             };
             /** @description Internal server error */
